@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple, Type, TypeVar, Union
+import math
 
 
 class Value(ABC):
@@ -113,50 +114,28 @@ class NumericTupleValue(Value):
 
 
 class DataBlockValue(Value):
-    @classmethod
-    def parse_data_block(
-        cls, header_line: str, lines: List[str], start_idx: int, value_width: int, values_per_line: int
-    ) -> Tuple["DataBlockValue", int]:
+    def __init__(self, value_str: str, value_width: int, values_per_line: int, items_per_value: int):
         """
-        解析数据块，返回 (DataBlockValue实例, 下一行索引)
+        value_str: 包含header和多行数据的完整字符串
         """
-        count = int(header_line.split("=")[1].strip())
-        data_lines = []
-        idx = start_idx
+        lines = value_str.split("\n")
+        data_lines = lines[1:]
 
-        while idx < len(lines) and len(data_lines) < count:
-            line = lines[idx].rstrip("\n").rstrip()
-
-            if line and "=" not in line:
-                data_lines.append(line)
-            elif "=" in line:
-                break
-
-            idx += 1
-
-        datablock = cls(header_line, data_lines, value_width, values_per_line)
-        return datablock, idx
-
-    def __init__(self, header_line: str, data_lines: List[str], value_width: int, values_per_line: int):
         self._value_width = value_width
         self._values_per_line = values_per_line
+        self._items_per_value = items_per_value
 
-        key, count_str = header_line.split("=", 1)
-        self._key = key.strip()
-        self._count = int(count_str.strip())
+        self._count = int(lines[0].strip())
 
-        self._data = self._parse_data_lines(data_lines)
-
-    def _parse_data_lines(self, lines: List[str]) -> Tuple[FloatValue, ...]:
         result = []
-        for line in lines:
+        for line in data_lines:
             pos = 0
             while pos < len(line):
                 chunk = line[pos : pos + self._value_width]
                 result.append(FloatValue(chunk.strip()))
                 pos += self._value_width
 
-        return tuple(result)
+        self._data = tuple(result)
 
     def __str__(self) -> str:
         data_lines = []
@@ -165,7 +144,7 @@ class DataBlockValue(Value):
             line = "".join(str(v).rjust(self._value_width) for v in chunk)
             data_lines.append(line)
 
-        return "\n".join([str(self._count)] + data_lines) + "\n"
+        return "\n".join([str(self._count)] + data_lines)
 
     @property
     def value(self) -> int:
@@ -218,7 +197,7 @@ class GeometryStructure(ABC):
         return key.strip(), value.strip()
 
     def _format_key_value_line(self, key: str, value: Value) -> str:
-        return f"{key}={str(value)}"
+        return f"{key}={str(value)}\n"
 
     def _parse_lines(self, lines: List[str]):
         i = 0
@@ -237,9 +216,14 @@ class GeometryStructure(ABC):
                     value_type, kwargs = value_type_info
 
                     if value_type == DataBlockValue:
-                        datablock, next_idx = DataBlockValue.parse_data_block(line, lines, i + 1, **kwargs)
-                        self[key] = datablock
-                        i = next_idx
+                        count = int(value_str.strip())
+                        num_items_per_line = kwargs["values_per_line"] / kwargs["items_per_value"]
+                        num_lines = math.ceil(count / num_items_per_line)
+
+                        block_content = "\n".join([value_str] + lines[i + 1 : i + 1 + num_lines])
+
+                        self[key] = DataBlockValue(block_content, **kwargs)
+                        i += 1 + num_lines
                     else:
                         value = value_type(value_str, **kwargs)
                         self[key] = value
@@ -262,7 +246,7 @@ class River(GeometryStructure):
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "River Reach": (CommaSeparatedValue, {"element_type": StringValue}),
-            "Reach XY": (DataBlockValue, {"value_width": 16, "values_per_line": 4}),
+            "Reach XY": (DataBlockValue, {"value_width": 16, "values_per_line": 4, "items_per_value": 2}),
             "Rch Text X Y": (CommaSeparatedValue, {"element_type": StringValue}),
             "Reverse River Text": IntValue,
         }
@@ -271,9 +255,5 @@ class River(GeometryStructure):
     def generate(self) -> List[str]:
         result = []
         for key, value in self._key_value_pairs.items():
-            formatted = self._format_key_value_line(key, value)
-            if isinstance(value, DataBlockValue):
-                result.append(formatted)
-            else:
-                result.append(formatted + "\n")
+            result.append(self._format_key_value_line(key, value))
         return result
