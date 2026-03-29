@@ -14,12 +14,6 @@ class Block(GeometryStructure):
         }
         super().__init__(lines)
 
-    def generate(self) -> List[str]:
-        result = []
-        for key, value in self._key_value_pairs.items():
-            result.append(self._format_key_value_line(key, value))
-        return result
-
 
 BLOCK_TESTS = [
     {

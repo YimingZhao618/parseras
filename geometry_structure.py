@@ -237,9 +237,11 @@ class GeometryStructure(ABC):
 
         return self
 
-    @abstractmethod
     def generate(self) -> List[str]:
-        pass
+        result = []
+        for key, value in self._key_value_pairs.items():
+            result.append(self._format_key_value_line(key, value))
+        return result
 
 
 class River(GeometryStructure):
@@ -251,9 +253,3 @@ class River(GeometryStructure):
             "Reverse River Text": IntValue,
         }
         super().__init__(lines)
-
-    def generate(self) -> List[str]:
-        result = []
-        for key, value in self._key_value_pairs.items():
-            result.append(self._format_key_value_line(key, value))
-        return result
