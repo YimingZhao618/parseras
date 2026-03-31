@@ -1,7 +1,7 @@
 import subprocess
 from typing import List, Type, Dict, Any
 
-from geometry_structure import (
+from parseras import (
     River,
     BreakLine,
     CrossSection,
