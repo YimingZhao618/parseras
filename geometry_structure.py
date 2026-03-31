@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, List, Tuple, Type, TypeVar
 import math
+from dataclasses import dataclass
 
 
 class Value(ABC):
@@ -58,15 +59,7 @@ class FloatValue(Value):
 
 class CommaSeparatedValue(Value):
     def __init__(self, value_str: str, element_type: Type[Value] = StringValue):
-        parts = value_str.split(",")
-        result = []
-        for part in parts:
-            part = part.strip()
-            if part:
-                result.append(element_type(part))
-            else:
-                result.append(None)
-        self._value = tuple(result)
+        self._value = tuple(element_type(part.strip()) for part in value_str.split(","))
         self._element_type = element_type
 
     def __str__(self) -> str:
@@ -79,8 +72,7 @@ class CommaSeparatedValue(Value):
 
 class SpaceSeparatedValue(Value):
     def __init__(self, value_str: str, element_type: Type[Value] = StringValue):
-        parts = value_str.split()
-        self._value = tuple(element_type(part) for part in parts)
+        self._value = tuple(element_type(part.strip()) for part in value_str.split())
         self._element_type = element_type
 
     def __str__(self) -> str:
@@ -91,26 +83,14 @@ class SpaceSeparatedValue(Value):
         return self._value
 
 
-class NumericTupleValue(Value):
-    def __init__(self, value_str: str):
-        parts = value_str.split()
-        result = []
-        for part in parts:
-            part = part.strip()
-            if not part:
-                continue
-            try:
-                result.append(int(part))
-            except ValueError:
-                result.append(float(part))
-        self._value = tuple(result)
-
-    def __str__(self) -> str:
-        return " ".join(str(v) for v in self._value)
-
-    @property
-    def value(self) -> Tuple[Union[int, float], ...]:
-        return self._value
+@dataclass
+class DataValue:
+    data: Tuple
+    value_width: int
+    values_per_line: int
+    items_per_value: int
+    header_values: Tuple
+    count: int
 
 
 class DataBlockValue(Value):
@@ -119,43 +99,34 @@ class DataBlockValue(Value):
         header_line = lines[0].strip()
         data_lines = lines[1:]
 
-        self._value_width = value_width
-        self._values_per_line = values_per_line
-        self._items_per_value = items_per_value
-
-        header_parts = [part.strip() for part in header_line.split(",")]
-        self._count = int(header_parts[0])
-        self._header_values = tuple(header_parts)
-
         result = []
         for line in data_lines:
             pos = 0
             while pos < len(line):
-                chunk = line[pos : pos + self._value_width]
+                chunk = line[pos : pos + value_width]
                 result.append(FloatValue(chunk.strip()))
-                pos += self._value_width
+                pos += value_width
 
-        self._data = tuple(result)
+        data = tuple(result)
+
+        header_parts = [part.strip() for part in header_line.split(",")]
+        header_values = tuple(header_parts)
+        count = int(header_parts[0])
+
+        self._value = DataValue(data, value_width, values_per_line, items_per_value, header_values, count)
 
     def __str__(self) -> str:
         data_lines = []
-        for i in range(0, len(self._data), self._values_per_line):
-            chunk = self._data[i : i + self._values_per_line]
-            line = "".join(str(v).rjust(self._value_width) for v in chunk)
+        for i in range(0, len(self._value.data), self._value.values_per_line):
+            chunk = self._value.data[i : i + self._value.values_per_line]
+            line = "".join(str(v).rjust(self._value.value_width) for v in chunk)
             data_lines.append(line)
 
-        return "\n".join([",".join(self._header_values)] + data_lines)
+        return "\n".join([",".join(self._value.header_values)] + data_lines)
 
     @property
-    def value(self) -> int:
-        return self._count
-
-    @property
-    def header_values(self) -> Tuple[str, ...]:
-        return self._header_values
-
-    def __len__(self) -> int:
-        return len(self._data)
+    def value(self) -> DataValue:
+        return self._value
 
 
 T = TypeVar("T", bound="GeometryStructure")
@@ -337,7 +308,10 @@ class LateralWeir(GeometryStructure):
             "Lateral Weir Type": IntValue,
             "Lateral Weir Connection Pos and Dist": (CommaSeparatedValue, {"element_type": StringValue}),
             "Lateral Weir SE": (DataBlockValue, {"value_width": 8, "values_per_line": 10, "items_per_value": 2}),
-            "Lateral Weir Centerline": (DataBlockValue, {"value_width": 16, "values_per_line": 4, "items_per_value": 2}),
+            "Lateral Weir Centerline": (
+                DataBlockValue,
+                {"value_width": 16, "values_per_line": 4, "items_per_value": 2},
+            ),
             "LW Div RC": (CommaSeparatedValue, {"element_type": StringValue}),
         }
         super().__init__(lines)
@@ -347,7 +321,10 @@ class StorageArea(GeometryStructure):
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Storage Area": (CommaSeparatedValue, {"element_type": StringValue}),
-            "Storage Area Surface Line": (DataBlockValue, {"value_width": 16, "values_per_line": 2, "items_per_value": 2}),
+            "Storage Area Surface Line": (
+                DataBlockValue,
+                {"value_width": 16, "values_per_line": 2, "items_per_value": 2},
+            ),
             "Storage Area Type": IntValue,
             "Storage Area Area": StringValue,
             "Storage Area Min Elev": StringValue,
