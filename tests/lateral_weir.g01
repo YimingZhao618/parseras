@@ -1,21 +1,21 @@
-Type RM Length L Ch R = 6 ,8926    ,,,
+Type RM Length L Ch R=6,8926,,,
 Node Name=bank
 Node Last Edited Time=Feb/03/2026 19:15:02
-Lateral Weir Pos= 0
-Lateral Weir End=                ,                ,        ,Perimeter 1
+Lateral Weir Pos=0
+Lateral Weir End=,,,Perimeter 1
 Lateral Weir Distance=0
 Lateral Weir TW Multiple XS=0
 Lateral Weir WD=100
 Lateral Weir Coef=1.1
 LW OverFlow Method 2D=0
 LW OverFlow Use Velocity Into 2D=0
-Lateral Weir WSCriteria= 0
-Lateral Weir Flap Gates= 0
-Lateral Weir Hagers EQN= 0 ,,,,,
+Lateral Weir WSCriteria=0
+Lateral Weir Flap Gates=0
+Lateral Weir Hagers EQN=0,,,,,
 Lateral Weir SS=0.05,0.05,
-Lateral Weir Type= 0
-Lateral Weir Connection Pos and Dist= 0 ,
-Lateral Weir SE= 359
+Lateral Weir Type=0
+Lateral Weir Connection Pos and Dist=0,
+Lateral Weir SE=359
        0   937.5    24.5   937.5      30  937.19    51.8  937.19    57.2  936.84
     68.1  936.84    73.5  936.53    84.4  936.53    91.3  936.23   100.7  936.19
    102.7  936.07105.5156935.7046  114.62935.7046  114.62935.0854     118  934.91
@@ -88,10 +88,10 @@ Lateral Weir SE= 359
  5075.29935.5625 5128.42935.5625 5128.42 935.8755189.473 935.875    5195  936.17
   5195.2  936.21  5206.1  938.42    5213   940.1  5213.3  940.16  5213.8  940.27
   5216.9  940.84  5218.9  941.12  5220.5  941.38  5222.1  941.63
-Lateral Weir Centerline= 9
+Lateral Weir Centerline=9
 405847.8006257981802488.50152492405497.0219099591803303.54618819
 405149.6357641761804138.42919497405133.8358551361804651.89470995
 405558.7596740511804862.98589741406282.5008882031804857.50300943
 407162.5044099571804517.56395429407364.0005434421804322.92143079
 407777.9585863851804051.51847548
-LW Div RC= 0 ,False,,
+LW Div RC=0,False,,
