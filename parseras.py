@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, Type, TypeVar
 import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Type, TypeVar
 
 
 class Value(ABC):
@@ -267,10 +267,12 @@ class BreakLine:
                 continue
 
             if stripped.startswith("BreakLine Name"):
-                current_block and self._value.append(SingleBreakLine(current_block))
+                if current_block:
+                    self._value.append(SingleBreakLine(current_block))
                 current_block = [line]
             elif stripped.startswith("LCMann Time"):
-                current_block and self._value.append(SingleBreakLine(current_block))
+                if current_block:
+                    self._value.append(SingleBreakLine(current_block))
                 self._value.append(BreakLineMeta([line] + list(iterator)))
                 break
             else:
@@ -278,6 +280,10 @@ class BreakLine:
 
     def generate(self) -> List[str]:
         return [line for item in self._value for line in item.generate()]
+
+    @property
+    def value(self) -> List[SingleBreakLine | BreakLineMeta]:
+        return self._value
 
 
 class CrossSection(GeometryStructure):
