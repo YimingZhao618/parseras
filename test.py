@@ -117,6 +117,10 @@ FULL_FILE_TESTS = [
         "test_name": "leak.g01",
         "file_path": "tests/leak.g01",
     },
+    {
+        "test_name": "Muncie.g01",
+        "file_path": "tests/Muncie.g01",
+    },
 ]
 
 

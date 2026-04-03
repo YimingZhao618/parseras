@@ -82,6 +82,16 @@ class SpaceSeparatedValue(Value):
     def value(self) -> Tuple[Any, ...]:
         return self._value
 
+class LinesValue(Value):
+    def __init__(self, value_str: str):
+        self._value = value_str
+
+    def __str__(self) -> str:
+        return self._value
+
+    @property
+    def value(self) -> str:
+        return self._value
 
 @dataclass
 class DataValue:
@@ -203,11 +213,20 @@ class RASStructure(ABC):
                         value = value_type(value_str, **kwargs)
                         self[key] = value
                         i += 1
+                elif value_type_info == LinesValue:
+                    count = int(value_str.strip())
+                    block_content = value_str
+                    if count:
+                        block_content += '\n' + "".join(lines[i + 1 : i + 1 + count])
+                    self[key] = LinesValue(block_content)
+                    i += 1 + count
                 elif isinstance(value_type_info, type) and issubclass(value_type_info, Value):
                     value = value_type_info(value_str)
                     self[key] = value
                     i += 1
             else:
+                if line.startswith('Permanent Ineff'):
+                    i += 1
                 i += 1
 
         return self
@@ -248,8 +267,11 @@ class BreakLineMeta(RASStructure):
         self._key_value_types = {
             "LCMann Time": StringValue,
             "LCMann Region Time": StringValue,
-            "LCMann Table": IntValue,
             "Chan Stop Cuts": IntValue,
+            "LCMann Table": LinesValue,
+            "LCMann Region Name": StringValue,
+            "LCMann Region Table": LinesValue,
+            "LCMann Region Polygon": (DataBlockValue, {"value_width": 16, "values_per_line": 4, "items_per_value": 2}),
         }
         super().__init__(lines)
 
@@ -265,11 +287,11 @@ class BreakLine:
             if not stripped:
                 continue
 
-            if stripped.startswith("BreakLine Name"):
+            if stripped.startswith("BreakLine"):
                 if current_block:
                     self._value.append(SingleBreakLine(current_block))
                 current_block = [line]
-            elif stripped.startswith("LCMann Time"):
+            elif stripped.startswith("LCMann"):
                 if current_block:
                     self._value.append(SingleBreakLine(current_block))
                 self._value.append(BreakLineMeta([line] + list(iterator)))
@@ -293,6 +315,7 @@ class CrossSection(RASStructure):
             "Node Last Edited Time": StringValue,
             "#Sta/Elev": (DataBlockValue, {"value_width": 8, "values_per_line": 10, "items_per_value": 2}),
             "#Mann": (DataBlockValue, {"value_width": 8, "values_per_line": 9, "items_per_value": 3}),
+            "#XS Ineff": (DataBlockValue, {"value_width": 8, "values_per_line": 9, "items_per_value": 3}),
             "Bank Sta": (CommaSeparatedValue, {"element_type": StringValue}),
             "XS Rating Curve": (CommaSeparatedValue, {"element_type": StringValue}),
             "XS HTab Starting El and Incr": (CommaSeparatedValue, {"element_type": StringValue}),
@@ -332,9 +355,9 @@ class LateralWeir(RASStructure):
             "Node Last Edited Time": StringValue,
             "Lateral Weir Pos": IntValue,
             "Lateral Weir End": (CommaSeparatedValue, {"element_type": StringValue}),
-            "Lateral Weir Distance": IntValue,
+            "Lateral Weir Distance": FloatValue,
             "Lateral Weir TW Multiple XS": IntValue,
-            "Lateral Weir WD": IntValue,
+            "Lateral Weir WD": FloatValue,
             "Lateral Weir Coef": FloatValue,
             "LW OverFlow Method 2D": IntValue,
             "LW OverFlow Use Velocity Into 2D": IntValue,
@@ -428,17 +451,19 @@ class GeometryFile:
             "BreakLine Name": BreakLine,
             "Storage Area": StorageArea,
             "Use User Specified Reach Order": Foot,
+            "Geom Raster": Foot,
+            "GIS Ratio Cuts To Invert": Foot,
         }
 
         if key in block_type_map:
             return block_type_map[key]
 
         if key == "Type RM Length L Ch R":
-            if len(block) > 1:
-                second_line = block[1].strip()
-                if second_line.startswith("Node Name"):
+            for line in block[1:]:
+                line = line.strip()
+                if line.startswith("Node Name") or line.startswith('Lateral Weir'):
                     return LateralWeir
-                elif second_line.startswith("XS GIS Cut Line"):
+                elif line.startswith("XS GIS Cut Line"):
                     return CrossSection
 
         raise ValueError(f"Unknown block type for key: {key}")
