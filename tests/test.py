@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from typing import List, Dict, Any
 
 # 使用相对导入
+import json
+
 from parseras import (
     River,
     BreakLine,
@@ -18,6 +20,7 @@ from parseras import (
     RASStructure,
     DataBlockValue,
     GeometryFile,
+    RiverModel,
 )
 
 
@@ -183,6 +186,9 @@ def main():
     for test_config in FULL_FILE_TESTS:
         full_file_results[test_config["test_name"]] = test_full_file(test_config["file_path"])
 
+    # 运行河流修改测试
+    river_modification_result = test_river_modification()
+
     print("=" * 80)
     print("Test Summary")
     print("=" * 80)
@@ -204,6 +210,11 @@ def main():
     for test_name, passed in full_file_results.items():
         print(f"{'✅' if passed else '❌'} {test_name} test: {'PASSED' if passed else 'FAILED'}")
         all_passed = all_passed and passed
+
+    print("=" * 60)
+
+    print(f"{'✅' if river_modification_result else '❌'} River Modification test: {'PASSED' if river_modification_result else 'FAILED'}")
+    all_passed = all_passed and river_modification_result
 
     print("=" * 80)
 
@@ -229,6 +240,64 @@ def test_full_file(file_path: str) -> bool:
     generated_text = "".join(generated_lines)
     original_text = "".join(original_lines)
     return original_text == generated_text
+
+
+def test_river_modification() -> bool:
+    """测试河流修改功能"""
+    # 加载测试文件
+    g_file = GeometryFile(file_path="tests/data/all.g01")
+
+    # 创建RiverModel实例
+    river_model = RiverModel(g_file)
+
+    # 获取所有河段的折线点
+    river_data_json = river_model.get_all_river_reach_lines()
+    river_data = json.loads(river_data_json)
+
+    if river_data.get("status") == "success" and river_data.get("data"):
+        # 遍历所有河流和河段
+        for river_name, reaches in river_data["data"].items():
+            for reach_name, points in reaches.items():
+                # 修改每个点的坐标：x加10，y减10
+                modified_points = []
+                for point in points:
+                    x, y = point
+                    modified_points.append([x + 10, y - 10])
+                
+                # 更新河段
+                update_data = {
+                    "River": river_name,
+                    "Reach": reach_name,
+                    "Reach XY": modified_points
+                }
+                response = river_model.update_or_create_river_reach(json.dumps(update_data))
+                print(f"Updated {river_name} - {reach_name}: {response}")
+
+    # 生成新的g01文件
+    output_file = "tests/data/all.river.output.g01"
+    generated_lines = g_file.generate()
+    with open(output_file, "w") as f:
+        f.writelines(generated_lines)
+
+    print(f"\nGenerated output file: {output_file}")
+
+    # 检查是否存在模板文件
+    template_file = "tests/data/all.river.template.g01"
+    if os.path.exists(template_file):
+        # 读取模板文件内容
+        with open(template_file, "r") as f:
+            template_content = f.read()
+        
+        # 读取生成的文件内容
+        with open(output_file, "r") as f:
+            output_content = f.read()
+        
+        # 比较两个文件
+        return template_content == output_content
+    else:
+        print(f"\nTemplate file not found: {template_file}")
+        print("Please create the template file based on the generated output.")
+        return False
 
 
 if __name__ == "__main__":
