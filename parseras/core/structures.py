@@ -1,8 +1,16 @@
 import math
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, Type
+from abc import ABC
+from typing import Any, Dict, List, Tuple
 
-from parseras.core.values import Value, StringValue, IntValue, FloatValue, CommaSeparatedValue, LinesValue, DataBlockValue
+from parseras.core.values import (
+    Value,
+    StringValue,
+    IntValue,
+    FloatValue,
+    CommaSeparatedValue,
+    LinesValue,
+    DataBlockValue,
+)
 
 
 class RASStructure(ABC):
@@ -81,7 +89,7 @@ class RASStructure(ABC):
                     count = int(value_str.strip())
                     block_content = value_str
                     if count:
-                        block_content += '\n' + "".join(lines[i + 1 : i + 1 + count])
+                        block_content += "\n" + "".join(lines[i + 1 : i + 1 + count])
                     self[key] = LinesValue(block_content)
                     i += 1 + count
                 elif isinstance(value_type_info, type) and issubclass(value_type_info, Value):
@@ -89,7 +97,7 @@ class RASStructure(ABC):
                     self[key] = value
                     i += 1
             else:
-                if line.startswith('Permanent Ineff'):
+                if line.startswith("Permanent Ineff"):
                     i += 1
                 i += 1
 
@@ -103,6 +111,8 @@ class RASStructure(ABC):
 
 
 class River(RASStructure):
+    order = 10.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "River Reach": (CommaSeparatedValue, {"element_type": StringValue}),
@@ -141,6 +151,8 @@ class BreakLineMeta(RASStructure):
 
 
 class BreakLine:
+    order = 150.0
+
     def __init__(self, lines: List[str]):
         self._value = []
         iterator = iter(lines)
@@ -172,6 +184,8 @@ class BreakLine:
 
 
 class CrossSection(RASStructure):
+    order = 30.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Type RM Length L Ch R": (CommaSeparatedValue, {"element_type": StringValue}),
@@ -191,6 +205,8 @@ class CrossSection(RASStructure):
 
 
 class Foot(RASStructure):
+    order = 200.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Use User Specified Reach Order": IntValue,
@@ -202,6 +218,8 @@ class Foot(RASStructure):
 
 
 class Head(RASStructure):
+    order = 0.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Geom Title": StringValue,
@@ -212,6 +230,8 @@ class Head(RASStructure):
 
 
 class LateralWeir(RASStructure):
+    order = 30.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Type RM Length L Ch R": (CommaSeparatedValue, {"element_type": StringValue}),
@@ -242,6 +262,8 @@ class LateralWeir(RASStructure):
 
 
 class StorageArea(RASStructure):
+    order = 50.0
+
     def __init__(self, lines: List[str]):
         self._key_value_types = {
             "Storage Area": (CommaSeparatedValue, {"element_type": StringValue}),

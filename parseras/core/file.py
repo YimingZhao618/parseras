@@ -1,4 +1,3 @@
-import math
 from typing import List, Type
 
 from parseras.core.structures import RASStructure, Head, River, BreakLine, StorageArea, Foot, LateralWeir, CrossSection
@@ -59,7 +58,7 @@ class GeometryFile:
         if key == "Type RM Length L Ch R":
             for line in block[1:]:
                 line = line.strip()
-                if line.startswith("Node Name") or line.startswith('Lateral Weir'):
+                if line.startswith("Node Name") or line.startswith("Lateral Weir"):
                     return LateralWeir
                 elif line.startswith("XS GIS Cut Line"):
                     return CrossSection
@@ -76,10 +75,11 @@ class GeometryFile:
 
     def generate(self) -> List[str]:
         result = []
-        for i, block in enumerate(self._blocks):
+        sorted_blocks = sorted(self._blocks, key=lambda block: getattr(block, "order", 100.0))
+        for i, block in enumerate(sorted_blocks):
             block_lines = block.generate()
             result.extend(block_lines)
-            if i < len(self._blocks) - 1:
+            if i < len(sorted_blocks) - 1:
                 result.append("\n")
         return result
 
