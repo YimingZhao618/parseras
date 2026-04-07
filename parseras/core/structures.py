@@ -16,6 +16,7 @@ from parseras.core.values import (
 class RASStructure(ABC):
     _key_value_pairs: Dict[str, Value]
     _key_value_types: Dict[str, Any]
+    order = 100
 
     def __init__(self, lines: List[str]):
         self._key_value_pairs = {}
@@ -28,11 +29,7 @@ class RASStructure(ABC):
         return value
 
     def __setitem__(self, key: str, value: Value) -> None:
-        # 如果传入的是原始 Python 值，自动包装成对应的 Value 类型
-        if not isinstance(value, Value):
-            value = self._wrap_value(value)
         self._key_value_pairs[key] = value
-
     def __delitem__(self, key: str) -> None:
         if key not in self._key_value_pairs:
             raise KeyError(f"Key '{key}' not found")
@@ -53,39 +50,30 @@ class RASStructure(ABC):
         if "=" not in line:
             raise ValueError(f"Invalid key-value line: {line}")
         key, value = line.split("=", 1)
-        return key.strip(), value.strip()
+        return key.rstrip(), value.strip()
 
     def _format_key_value_line(self, key: str, value: Value) -> str:
         return f"{key}={str(value)}\n"
 
-    def _wrap_value(self, value) -> Value:
-        """将原始 Python 值自动包装成 Value 类型"""
-        if isinstance(value, bool):
-            return IntValue(int(value))
-        elif isinstance(value, int):
-            return IntValue(value)
-        elif isinstance(value, float):
-            return FloatValue(value)
-        elif isinstance(value, str):
-            return StringValue(value)
-        elif isinstance(value, (list, tuple)):
-            # 尝试解析为逗号分隔值
-            return CommaSeparatedValue(",".join(str(v) for v in value))
-        else:
-            return StringValue(str(value))
-
     def _parse_lines(self, lines: List[str]):
         i = 0
         while i < len(lines):
-            line = lines[i].strip()
-            if not line:
+            line = lines[i]
+            if not line.strip():
                 i += 1
                 continue
 
             key, value_str = self._parse_key_value_line(line)
 
-            if key in self._key_value_types:
-                value_type_info = self._key_value_types[key]
+            # 查找匹配的键（比较去除尾随空格的版本）
+            matched_key = None
+            for dict_key in self._key_value_types:
+                if dict_key.rstrip() == key.rstrip():
+                    matched_key = dict_key
+                    break
+
+            if matched_key is not None:
+                value_type_info = self._key_value_types[matched_key]
 
                 if isinstance(value_type_info, tuple) and len(value_type_info) == 2:
                     value_type, kwargs = value_type_info
@@ -98,22 +86,22 @@ class RASStructure(ABC):
 
                         block_content = "\n".join([value_str] + lines[i + 1 : i + 1 + num_lines])
 
-                        self[key] = DataBlockValue(block_content, **kwargs)
+                        self[matched_key] = DataBlockValue(block_content, **kwargs)
                         i += 1 + num_lines
                     else:
                         value = value_type(value_str, **kwargs)
-                        self[key] = value
+                        self[matched_key] = value
                         i += 1
                 elif value_type_info == LinesValue:
                     count = int(value_str.strip())
                     block_content = value_str
                     if count:
                         block_content += "\n" + "".join(lines[i + 1 : i + 1 + count])
-                    self[key] = LinesValue(block_content)
+                    self[matched_key] = LinesValue(block_content)
                     i += 1 + count
                 elif isinstance(value_type_info, type) and issubclass(value_type_info, Value):
                     value = value_type_info(value_str)
-                    self[key] = value
+                    self[matched_key] = value
                     i += 1
             else:
                 if line.startswith("Permanent Ineff"):
@@ -207,7 +195,7 @@ class CrossSection(RASStructure):
 
     def __init__(self, lines: List[str]):
         self._key_value_types = {
-            "Type RM Length L Ch R": (CommaSeparatedValue, {"element_type": StringValue}),
+            "Type RM Length L Ch R ": (CommaSeparatedValue, {"element_type": StringValue}),
             "XS GIS Cut Line": (DataBlockValue, {"value_width": 16, "values_per_line": 4, "items_per_value": 2}),
             "Node Last Edited Time": StringValue,
             "#Sta/Elev": (DataBlockValue, {"value_width": 8, "values_per_line": 10, "items_per_value": 2}),
@@ -221,6 +209,17 @@ class CrossSection(RASStructure):
             "Exp/Cntr": (CommaSeparatedValue, {"element_type": StringValue}),
         }
         super().__init__(lines)
+
+        # 根据station更新order
+        if "Type RM Length L Ch R " in self:
+            type_rm = self["Type RM Length L Ch R "].value
+            if len(type_rm) >= 2:
+                try:
+                    station = float(type_rm[1].value)
+                    if station > 0:
+                        self.order = 30 + 1 / station
+                except (ValueError, AttributeError):
+                    pass
 
 
 class Foot(RASStructure):
@@ -253,7 +252,7 @@ class LateralWeir(RASStructure):
 
     def __init__(self, lines: List[str]):
         self._key_value_types = {
-            "Type RM Length L Ch R": (CommaSeparatedValue, {"element_type": StringValue}),
+            "Type RM Length L Ch R ": (CommaSeparatedValue, {"element_type": StringValue}),
             "Node Name": StringValue,
             "Node Last Edited Time": StringValue,
             "Lateral Weir Pos": IntValue,
@@ -278,6 +277,17 @@ class LateralWeir(RASStructure):
             "LW Div RC": (CommaSeparatedValue, {"element_type": StringValue}),
         }
         super().__init__(lines)
+        
+        # 根据station更新order
+        if "Type RM Length L Ch R " in self:
+            type_rm = self["Type RM Length L Ch R "].value
+            if len(type_rm) >= 2:
+                try:
+                    station = float(type_rm[1].value)
+                    if station > 0:
+                        self.order = 30 + 1 / station
+                except (ValueError, AttributeError):
+                    pass
 
 
 class StorageArea(RASStructure):
