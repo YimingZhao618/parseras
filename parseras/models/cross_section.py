@@ -462,11 +462,8 @@ class CrossSectionModel:
             target_xs["Type RM Length L Ch R "] = type_rm_value
 
             # 手动更新order属性
-            try:
-                if station > 0:
-                    target_xs.order = 30 + 1 / station
-            except ValueError, AttributeError:
-                pass
+            if station > 0:
+                target_xs.order = 30 + 1 / station
 
             # 更新XS GIS Cut Line
             from parseras.core.values import DataBlockValue, DataValue, FloatValue

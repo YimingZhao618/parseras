@@ -68,7 +68,7 @@ def test_cross_section_read_write():
                                 break
                         # 静默模式，不打印详细信息
                         break
-                except ValueError, AttributeError:
+                except (ValueError, AttributeError):
                     pass
 
     # 3. 重建{station}断面
