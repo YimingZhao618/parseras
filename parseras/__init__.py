@@ -8,6 +8,7 @@ from .core.values import Value, StringValue, IntValue, FloatValue, CommaSeparate
 from . import utils
 from .models.cross_section import CrossSectionModel
 from .models.river import RiverModel
+from .models.lateral_weir import LateralWeirModel
 from .models.breakline import BreakLineModel
 
 __all__ = [
