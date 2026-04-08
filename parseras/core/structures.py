@@ -56,8 +56,6 @@ class RASStructure(ABC):
     def _format_key_value_line(self, key: str, value: Value) -> str:
         return f"{key}={str(value)}\n"
 
-    
-
     def _parse_lines(self, lines: List[str]):
         i = 0
         while i < len(lines):
@@ -165,25 +163,55 @@ class BreakLine:
 
     def __init__(self, lines: List[str]):
         self._value = []
-        iterator = iter(lines)
-        current_block = []
 
-        for line in iterator:
+        current_single_breakline = None
+        meta_lines = []
+        in_meta = False
+
+        for line in lines:
             stripped = line.strip()
-            if not stripped:
-                continue
 
-            if stripped.startswith("BreakLine"):
-                if current_block:
-                    self._value.append(SingleBreakLine(current_block))
-                current_block = [line]
+            if stripped.startswith("BreakLine Name="):
+                # 新的SingleBreakLine开始
+                if current_single_breakline is not None:
+                    # 保存当前的SingleBreakLine
+                    self._value.append(SingleBreakLine(current_single_breakline))
+
+                # 开始新的SingleBreakLine
+                current_single_breakline = [line]
+                in_meta = False
+
             elif stripped.startswith("LCMann"):
-                if current_block:
-                    self._value.append(SingleBreakLine(current_block))
-                self._value.append(BreakLineMeta([line] + list(iterator)))
-                break
+                # 遇到LCMann，开始BreakLineMeta部分
+                if current_single_breakline is not None:
+                    # 保存当前的SingleBreakLine
+                    self._value.append(SingleBreakLine(current_single_breakline))
+                    current_single_breakline = None
+
+                # 收集所有剩余行作为BreakLineMeta
+                meta_lines.append(line)
+                in_meta = True
+
             else:
-                current_block.append(line)
+                # 普通行
+                if in_meta:
+                    # 在BreakLineMeta部分
+                    meta_lines.append(line)
+                elif current_single_breakline is not None:
+                    # 在SingleBreakLine部分
+                    current_single_breakline.append(line)
+                else:
+                    # 文件不以BreakLine Name开头，可能是格式错误
+                    # 暂时忽略或作为BreakLineMeta处理
+                    pass
+
+        # 处理最后一个SingleBreakLine（如果没有遇到LCMann）
+        if current_single_breakline is not None:
+            self._value.append(SingleBreakLine(current_single_breakline))
+
+        # 如果有BreakLineMeta行
+        if meta_lines:
+            self._value.append(BreakLineMeta(meta_lines))
 
     def generate(self) -> List[str]:
         return [line for item in self._value for line in item.generate()]
@@ -280,7 +308,7 @@ class LateralWeir(RASStructure):
             "LW Div RC": (CommaSeparatedValue, {"element_type": StringValue}),
         }
         super().__init__(lines)
-        
+
         # 根据station更新order
         if "Type RM Length L Ch R " in self:
             type_rm = self["Type RM Length L Ch R "].value
