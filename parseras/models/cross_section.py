@@ -4,7 +4,6 @@ from parseras.core.structures import CrossSection
 from typing import Optional
 from parseras.utils import (
     calculate_centroid,
-    calculate_distance,
     calculate_total_length,
     get_point_at_distance,
     get_elevation_from_tif,
@@ -174,6 +173,65 @@ class CrossSectionModel:
             return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
         except Exception as e:
             return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+
+    def get_all_bank_station_coordinates(self) -> str:
+        """返回所有断面河岸的x,y坐标
+
+        返回格式：
+        {
+            "status": "success",
+            "data": [
+                [[x11, y11], [x21, y21], [x31, y31], ...],  # 左岸坐标
+                [[x12, y12], [x22, y22], [x32, y32], ...]   # 右岸坐标
+            ],
+            "message": ""
+        }
+        """
+        try:
+            left_bank_coords = []
+            right_bank_coords = []
+
+            for xs in self.cross_sections:
+                if "Type RM Length L Ch R " in xs and "Bank Sta" in xs and "XS GIS Cut Line" in xs:
+                    # 提取Bank Sta值
+                    bank_sta = xs["Bank Sta"].value
+                    values = [float(item.value) for item in bank_sta if item.value]
+                    if len(values) < 2:
+                        continue
+
+                    left_bank_sta = values[0]
+                    right_bank_sta = values[1]
+
+                    # 提取折线点
+                    cut_line = xs["XS GIS Cut Line"].value
+                    points = []
+                    data = cut_line.data
+                    for i in range(0, len(data), 2):
+                        if i + 1 < len(data):
+                            x = data[i].value
+                            y = data[i + 1].value
+                            points.append([x, y])
+
+                    if not points:
+                        continue
+
+                    # 计算折线总长度
+                    total_length = calculate_total_length(points)
+
+                    # 获取左岸坐标
+                    if left_bank_sta is not None and 0 <= left_bank_sta <= total_length:
+                        left_point = get_point_at_distance(points, left_bank_sta)
+                        left_bank_coords.append([left_point[0], left_point[1]])
+
+                    # 获取右岸坐标
+                    if right_bank_sta is not None and 0 <= right_bank_sta <= total_length:
+                        right_point = get_point_at_distance(points, right_bank_sta)
+                        right_bank_coords.append([right_point[0], right_point[1]])
+
+            result = [left_bank_coords, right_bank_coords]
+            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+        except Exception as e:
+            return json.dumps({"status": "error", "data": [], "message": str(e)}, indent=2)
 
     def update_mann_values(self, input_json: str) -> str:
         """更新特定断面的曼宁值
