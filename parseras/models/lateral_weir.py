@@ -3,7 +3,7 @@ LateralWeirModel 类 - 提供侧堰的业务逻辑封装
 """
 
 import json
-from typing import List, Optional, Dict, Any
+from typing import Optional
 from parseras.core.file import GeometryFile
 from parseras.core.structures import LateralWeir
 from parseras.core.values import (
@@ -12,7 +12,6 @@ from parseras.core.values import (
     DataValue,
     FloatValue,
     StringValue,
-    IntValue,
 )
 from parseras.utils import generate_se_from_centerline
 
@@ -271,13 +270,21 @@ class LateralWeirModel:
                 target_lw["Node Name"] = StringValue(node_name)
 
             # 3. 更新Lateral Weir End
-            if is_create or "Lateral Weir End" not in target_lw or input_data.get("Lateral Weir End Parameter") is not None:
+            if (
+                is_create
+                or "Lateral Weir End" not in target_lw
+                or input_data.get("Lateral Weir End Parameter") is not None
+            ):
                 lw_end_str = f",,,{lw_end_param}"
                 lw_end_value = CommaSeparatedValue(lw_end_str, element_type=StringValue)
                 target_lw["Lateral Weir End"] = lw_end_value
 
             # 4. 更新Lateral Weir Distance
-            if is_create or "Lateral Weir Distance" not in target_lw or input_data.get("Lateral Weir Distance") is not None:
+            if (
+                is_create
+                or "Lateral Weir Distance" not in target_lw
+                or input_data.get("Lateral Weir Distance") is not None
+            ):
                 target_lw["Lateral Weir Distance"] = FloatValue(str(lw_distance))
 
             # 5. 更新Lateral Weir WD
@@ -285,7 +292,11 @@ class LateralWeirModel:
                 target_lw["Lateral Weir WD"] = FloatValue(str(lw_wd))
 
             # 6. 更新Lateral Weir Centerline
-            if is_create or "Lateral Weir Centerline" not in target_lw or input_data.get("Lateral Weir Centerline") is not None:
+            if (
+                is_create
+                or "Lateral Weir Centerline" not in target_lw
+                or input_data.get("Lateral Weir Centerline") is not None
+            ):
                 centerline_data = []
                 for point in lw_centerline:
                     centerline_data.extend([FloatValue(str(point[0])), FloatValue(str(point[1]))])
@@ -303,7 +314,7 @@ class LateralWeirModel:
 
                     se_data = []
                     for dist, elev in se_table:
-                        se_data.extend([FloatValue(str(dist)), FloatValue(str(elev))])
+                        se_data.extend([FloatValue(str(dist)), FloatValue(str(elev + 0.01))])
 
                     count = len(se_table)
                     se_block = DataBlockValue(value_width=8, values_per_line=10, items_per_value=2)
@@ -325,30 +336,12 @@ class LateralWeirModel:
                     target_lw["Lateral Weir SE"] = se_block
 
             # 7. 更新order属性（基于station）
-            try:
-                if station > 0:
-                    target_lw.order = 30 + 1 / station
-            except (ValueError, AttributeError):
-                pass
+            if station > 0:
+                target_lw.order = 30 + 1 / station
 
-            # 8. 设置可选键的默认值（如果是创建）
-            if is_create:
-                # 设置一些合理的默认值
-                target_lw["Node Last Edited Time"] = StringValue("")
-                target_lw["Lateral Weir Pos"] = IntValue("0")
-                target_lw["Lateral Weir TW Multiple XS"] = IntValue("0")
-                target_lw["Lateral Weir Coef"] = FloatValue("0")
-                target_lw["LW OverFlow Method 2D"] = IntValue("0")
-                target_lw["LW OverFlow Use Velocity Into 2D"] = IntValue("0")
-                target_lw["Lateral Weir WSCriteria"] = IntValue("0")
-                target_lw["Lateral Weir Flap Gates"] = IntValue("0")
-                target_lw["Lateral Weir Hagers EQN"] = CommaSeparatedValue("", element_type=StringValue)
-                target_lw["Lateral Weir SS"] = CommaSeparatedValue("", element_type=StringValue)
-                target_lw["Lateral Weir Type"] = IntValue("0")
-                target_lw["Lateral Weir Connection Pos and Dist"] = CommaSeparatedValue("", element_type=StringValue)
-                target_lw["LW Div RC"] = CommaSeparatedValue("", element_type=StringValue)
-
-            return json.dumps({"status": "success", "data": {}, "message": message}, indent=2)
+            return json.dumps(
+                {"status": "success", "data": {}, "message": "Lateral weir updated/created successfully"}, indent=2
+            )
 
         except Exception as e:
             return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)

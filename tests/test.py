@@ -10,6 +10,7 @@ from tests.test_block import run_block_tests
 from tests.test_full_file import run_full_file_tests
 from tests.test_river_modification import test_river_modification
 from tests.test_cross_section import test_cross_section_read_write
+from tests.test_lateral_weir import test_lateral_weir_read_write
 
 
 def main():
@@ -29,6 +30,9 @@ def main():
 
     # 运行断面修改测试
     cross_section_modification_result = test_cross_section_read_write()
+
+    # 运行侧堰修改测试
+    lateral_weir_modification_result = test_lateral_weir_read_write()
 
     print("=" * 80)
     print("Test Summary")
@@ -70,6 +74,14 @@ def main():
         f"{'✅' if cross_section_modification_result else '❌'} Cross Section Modification test: {'PASSED' if cross_section_modification_result else 'FAILED'}"
     )
     all_passed = all_passed and cross_section_modification_result
+
+    print("=" * 60)
+
+    # 打印侧堰修改测试结果
+    print(
+        f"{'✅' if lateral_weir_modification_result else '❌'} Lateral Weir Modification test: {'PASSED' if lateral_weir_modification_result else 'FAILED'}"
+    )
+    all_passed = all_passed and lateral_weir_modification_result
 
     print("=" * 80)
 
