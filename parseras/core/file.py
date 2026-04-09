@@ -15,7 +15,6 @@ class GeometryFile:
         elif lines is not None:
             self._parse_lines(lines)
 
-
     def _split_into_blocks(self, lines: List[str]) -> List[List[str]]:
         blocks = []
         current_block = []

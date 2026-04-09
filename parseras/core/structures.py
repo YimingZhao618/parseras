@@ -30,7 +30,6 @@ class RASStructure(ABC):
 
     def __setitem__(self, key: str, value: Value) -> None:
         self._key_value_pairs[key] = value
-
     def __delitem__(self, key: str) -> None:
         if key not in self._key_value_pairs:
             raise KeyError(f"Key '{key}' not found")
