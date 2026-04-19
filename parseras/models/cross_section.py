@@ -15,42 +15,6 @@ class CrossSectionModel:
         self.geometry_file = geometry_file
         self.cross_sections = geometry_file.get_blocks_by_type(CrossSection)
 
-    def get_all_cross_section_lines(self) -> str:
-        """返回所有断面的折线点数值，也就是XS GIS Cut Line对应的点
-
-        返回格式：
-        {
-            "status": "success",
-            "data": {
-                "station1": [[x1, y1], [x2, y2], ...],
-                "station2": [[x1, y1], [x2, y2], ...],
-                ...
-            },
-            "message": ""
-        }
-        """
-        try:
-            result = {}
-            for xs in self.cross_sections:
-                if "Type RM Length L Ch R " in xs and "XS GIS Cut Line" in xs:
-                    # 提取断面在河流上的Station
-                    type_rm = xs["Type RM Length L Ch R "].value
-                    if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取折线点
-                        cut_line = xs["XS GIS Cut Line"].value
-                        points = []
-                        data = cut_line.data
-                        for i in range(0, len(data), 2):
-                            if i + 1 < len(data):
-                                x = data[i].value
-                                y = data[i + 1].value
-                                points.append([x, y])
-                        result[station] = points
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
-        except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
-
     def get_station_elev_table(self, station: float) -> str:
         """返回特定断面的Station/Elev表
 
@@ -94,144 +58,143 @@ class CrossSectionModel:
                 {"status": "error", "data": {"stations": [], "elevations": []}, "message": str(e)}, indent=2
             )
 
-    def get_all_mann_values(self) -> str:
-        """返回所有断面的曼宁值，也就是Mann
+    def get_mann_values(self, station: float) -> str:
+        """返回特定断面的曼宁值
+
+        Args:
+            station: 断面在河流上的Station值
 
         返回格式：
         {
             "status": "success",
             "data": {
-                "station1": {
-                    "Station": [sta1, sta2, ...],
-                    "Manning": [mann1, mann2, ...]
-                },
-                "station2": {
-                    "Station": [sta1, sta2, ...],
-                    "Manning": [mann1, mann2, ...]
-                },
-                ...
+                "Station": [sta1, sta2, ...],
+                "Manning": [mann1, mann2, ...]
             },
             "message": ""
         }
         """
         try:
-            result = {}
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R " in xs and "#Mann" in xs:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取曼宁值
-                        data = xs["#Mann"].value.data
-                        stations = []
-                        mannings = []
-                        for i in range(0, len(data), 3):
-                            if i + 2 < len(data):
-                                sta = data[i].value
-                                mann = data[i + 1].value
-                                stations.append(sta)
-                                mannings.append(mann)
-                        # 构建转置后的格式
-                        result[station] = {"Station": stations, "Manning": mannings}
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+                        xs_station = float(type_rm[1].value)
+                        if xs_station == station:
+                            # 提取曼宁值
+                            data = xs["#Mann"].value.data
+                            stations = []
+                            mannings = []
+                            for i in range(0, len(data), 3):
+                                if i + 2 < len(data):
+                                    sta = data[i].value
+                                    mann = data[i + 1].value
+                                    stations.append(sta)
+                                    mannings.append(mann)
+                            result = {"Station": stations, "Manning": mannings}
+                            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": {"Station": [], "Manning": []}, "message": ""}, indent=2)
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            return json.dumps({"status": "error", "data": {"Station": [], "Manning": []}, "message": str(e)}, indent=2)
 
-    def get_all_bank_stations(self) -> str:
-        """返回所有断面的Bank Sta值
+    def get_bank_stations(self, station: float) -> str:
+        """返回特定断面的Bank Sta值
+
+        Args:
+            station: 断面在河流上的Station值
 
         返回格式：
         {
             "status": "success",
-            "data": {
-                "station1": [bank_sta1, bank_sta2],
-                "station2": [bank_sta1, bank_sta2],
-                ...
-            },
+            "data": [bank_sta_left, bank_sta_right],
             "message": ""
         }
         """
         try:
-            result = {}
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R " in xs and "Bank Sta" in xs:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取Bank Sta值
-                        bank_sta = xs["Bank Sta"].value
-                        values: list[Optional[float]] = [float(item.value) for item in bank_sta if item.value]
-                        # 确保只返回前两个值，分别对应左岸和右岸
-                        if len(values) > 2:
-                            values = values[:2]
-                        # 如果不足两个值，用None填充
-                        elif len(values) < 2:
-                            values.extend([None] * (2 - len(values)))
-                        result[station] = values
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+                        xs_station = float(type_rm[1].value)
+                        if xs_station == station:
+                            # 提取Bank Sta值
+                            bank_sta = xs["Bank Sta"].value
+                            values: list[Optional[float]] = [float(item.value) for item in bank_sta if item.value]
+                            # 确保只返回前两个值，分别对应左岸和右岸
+                            if len(values) > 2:
+                                values = values[:2]
+                            # 如果不足两个值，用None填充
+                            elif len(values) < 2:
+                                values.extend([None] * (2 - len(values)))
+                            return json.dumps({"status": "success", "data": values, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            return json.dumps({"status": "error", "data": [None, None], "message": str(e)}, indent=2)
 
-    def get_all_bank_station_coordinates(self) -> str:
-        """返回所有断面河岸的x,y坐标
+    def get_bank_station_coordinates(self, station: float) -> str:
+        """返回特定断面河岸的x,y坐标
+
+        Args:
+            station: 断面在河流上的Station值
 
         返回格式：
         {
             "status": "success",
-            "data": [
-                [[x11, y11], [x21, y21], [x31, y31], ...],  # 左岸坐标
-                [[x12, y12], [x22, y22], [x32, y32], ...]   # 右岸坐标
-            ],
+            "data": [[x1, y1], [x2, y2]],  # 左岸坐标, 右岸坐标
             "message": ""
         }
         """
         try:
-            left_bank_coords = []
-            right_bank_coords = []
-
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R " in xs and "Bank Sta" in xs and "XS GIS Cut Line" in xs:
-                    # 提取Bank Sta值
-                    bank_sta = xs["Bank Sta"].value
-                    values = [float(item.value) for item in bank_sta if item.value]
-                    if len(values) < 2:
-                        continue
+                    # 提取断面在河流上的Station
+                    type_rm = xs["Type RM Length L Ch R "].value
+                    if len(type_rm) >= 2:
+                        xs_station = float(type_rm[1].value)
+                        if xs_station == station:
+                            # 提取Bank Sta值
+                            bank_sta = xs["Bank Sta"].value
+                            values = [float(item.value) for item in bank_sta if item.value]
+                            if len(values) < 2:
+                                return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
 
-                    left_bank_sta = values[0]
-                    right_bank_sta = values[1]
+                            left_bank_sta = values[0]
+                            right_bank_sta = values[1]
 
-                    # 提取折线点
-                    cut_line = xs["XS GIS Cut Line"].value
-                    points = []
-                    data = cut_line.data
-                    for i in range(0, len(data), 2):
-                        if i + 1 < len(data):
-                            x = data[i].value
-                            y = data[i + 1].value
-                            points.append([x, y])
+                            # 提取折线点
+                            cut_line = xs["XS GIS Cut Line"].value
+                            points = []
+                            data = cut_line.data
+                            for i in range(0, len(data), 2):
+                                if i + 1 < len(data):
+                                    x = data[i].value
+                                    y = data[i + 1].value
+                                    points.append([x, y])
 
-                    if not points:
-                        continue
+                            if not points:
+                                return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
 
-                    # 计算折线总长度
-                    total_length = calculate_total_length(points)
+                            # 计算折线总长度
+                            total_length = calculate_total_length(points)
 
-                    # 获取左岸坐标
-                    if left_bank_sta is not None and 0 <= left_bank_sta <= total_length:
-                        left_point = get_point_at_distance(points, left_bank_sta)
-                        left_bank_coords.append([left_point[0], left_point[1]])
+                            left_point = None
+                            right_point = None
 
-                    # 获取右岸坐标
-                    if right_bank_sta is not None and 0 <= right_bank_sta <= total_length:
-                        right_point = get_point_at_distance(points, right_bank_sta)
-                        right_bank_coords.append([right_point[0], right_point[1]])
+                            # 获取左岸坐标
+                            if left_bank_sta is not None and 0 <= left_bank_sta <= total_length:
+                                left_point = get_point_at_distance(points, left_bank_sta)
 
-            result = [left_bank_coords, right_bank_coords]
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+                            # 获取右岸坐标
+                            if right_bank_sta is not None and 0 <= right_bank_sta <= total_length:
+                                right_point = get_point_at_distance(points, right_bank_sta)
+
+                            result = [left_point, right_point]
+                            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
         except Exception as e:
-            return json.dumps({"status": "error", "data": [], "message": str(e)}, indent=2)
+            return json.dumps({"status": "error", "data": [None, None], "message": str(e)}, indent=2)
 
     def update_mann_values(self, input_json: str) -> str:
         """更新特定断面的曼宁值
