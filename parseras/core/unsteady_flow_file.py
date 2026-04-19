@@ -209,8 +209,8 @@ class UnsteadyFlowFile:
         # Friction Slope（逗号分隔的两个值）
         elif "Friction Slope" in bc:
             fv = bc["Friction Slope"].value
-            if fv and hasattr(fv, 'value'):
-                result["values"] = [float(v.value) for v in fv.value]
+            if fv:
+                result["values"] = [float(v.value) for v in fv]
 
         return result
 
