@@ -238,7 +238,7 @@ class ConnectionModel:
                 target_conn["Conn Weir WD"] = IntValue(str(input_data["Conn Weir WD"]))
 
             if tif_path and conn_line:
-                from parseras.utils.gis import calculate_total_length, get_point_at_distance, get_elevation_from_tif
+                from parseras.utils import calculate_total_length, get_point_at_distance, get_elevation_from_tif
                 points = [(p[0], p[1]) for p in conn_line]
                 total_length = calculate_total_length(points)
                 num_points = 101

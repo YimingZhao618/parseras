@@ -28,7 +28,7 @@ class PlanHead:
 
     order = 0.0
     KEYS = frozenset(
-        ("Plan Title", "Short Identifier", "Simulation Date", "Geom File", "Flow File")
+        ("Plan Title", "Short Identifier", "Simulation Date", "Geom File", "Flow File", "Program Version")
     )
 
     def __init__(self, lines: List[str] | None = None):
