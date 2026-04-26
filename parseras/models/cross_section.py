@@ -15,7 +15,7 @@ class CrossSectionModel:
         self.geometry_file = geometry_file
         self.cross_sections = geometry_file.get_blocks_by_type(CrossSection)
 
-    def get_station_elev_table(self, station: float) -> str:
+    def get_station_elev_table(self, station) -> str:
         """返回特定断面的Station/Elev表
 
         返回格式：
@@ -34,8 +34,8 @@ class CrossSectionModel:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             # 提取Sta/Elev表
                             sta_elev = xs["#Sta/Elev"].value
                             stations = []
@@ -58,7 +58,7 @@ class CrossSectionModel:
                 {"status": "error", "data": {"stations": [], "elevations": []}, "message": str(e)}, indent=2
             )
 
-    def get_mann_values(self, station: float) -> str:
+    def get_mann_values(self, station) -> str:
         """返回特定断面的曼宁值
 
         Args:
@@ -80,8 +80,8 @@ class CrossSectionModel:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             # 提取曼宁值
                             data = xs["#Mann"].value.data
                             stations = []
@@ -98,7 +98,7 @@ class CrossSectionModel:
         except Exception as e:
             return json.dumps({"status": "error", "data": {"Station": [], "Manning": []}, "message": str(e)}, indent=2)
 
-    def get_bank_stations(self, station: float) -> str:
+    def get_bank_stations(self, station) -> str:
         """返回特定断面的Bank Sta值
 
         Args:
@@ -117,8 +117,8 @@ class CrossSectionModel:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             # 提取Bank Sta值
                             bank_sta = xs["Bank Sta"].value
                             values: list[Optional[float]] = [float(item.value) for item in bank_sta if item.value]
@@ -133,7 +133,7 @@ class CrossSectionModel:
         except Exception as e:
             return json.dumps({"status": "error", "data": [None, None], "message": str(e)}, indent=2)
 
-    def get_bank_station_coordinates(self, station: float) -> str:
+    def get_bank_station_coordinates(self, station) -> str:
         """返回特定断面河岸的x,y坐标
 
         Args:
@@ -152,8 +152,8 @@ class CrossSectionModel:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             # 提取Bank Sta值
                             bank_sta = xs["Bank Sta"].value
                             values = [float(item.value) for item in bank_sta if item.value]
@@ -235,8 +235,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == xs_station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(xs_station).strip():
                             target_xs = xs
                             break
 
@@ -306,8 +306,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == xs_station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(xs_station).strip():
                             target_xs = xs
                             break
 
@@ -365,8 +365,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(station).strip():
                             target_xs = xs
                             break
 
@@ -384,15 +384,16 @@ class CrossSectionModel:
             # 计算当前断面的几何中心
             current_centroid = calculate_centroid(xs_gis_cut_line)
 
-            # 找到比当前Station大的最小断面
+            # 找到比当前Station大的最小断面（station 转数值用于排序比较）
             next_xs = None
             next_station = float("inf")
+            station_float = float(station)
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R" in xs and "XS GIS Cut Line" in xs:
                     type_rm = xs["Type RM Length L Ch R"].value
                     if len(type_rm) >= 2:
                         current_station = float(type_rm[1].value)
-                        if current_station > station and current_station < next_station:
+                        if current_station > station_float and current_station < next_station:
                             next_station = current_station
                             next_xs = xs
 
@@ -424,9 +425,9 @@ class CrossSectionModel:
             type_rm_value = CommaSeparatedValue(type_rm_str, element_type=StringValue)
             target_xs["Type RM Length L Ch R "] = type_rm_value
 
-            # 手动更新order属性
-            if station > 0:
-                target_xs.order = 30 + 1 / station
+            # 手动更新order属性（station_float 用于数值计算）
+            if station_float > 0:
+                target_xs.order = 30 + 1 / station_float
 
             # 更新XS GIS Cut Line
             from parseras.core.values import DataBlockValue, DataValue, FloatValue
@@ -506,15 +507,13 @@ class CrossSectionModel:
             if station is None:
                 return json.dumps({"status": "error", "data": {}, "message": "Missing required field 'Station'"}, indent=2)
 
-            station = float(station)
-
             xs_index = None
             for i, xs in enumerate(self.geometry_file._blocks):
                 if isinstance(xs, CrossSection) and "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             xs_index = i
                             break
 
