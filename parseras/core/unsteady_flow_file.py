@@ -42,6 +42,7 @@ class BoundaryCondition(RASStructure):
                 {"value_width": 8, "values_per_line": 10, "items_per_value": 1},
             ),
             "Flow Hydrograph Slope": StringValue,
+            "Flow Hydrograph Inital WS": FloatValue,
             "Stage Hydrograph": (
                 DataBlockValue,
                 {"value_width": 8, "values_per_line": 10, "items_per_value": 1},
@@ -169,6 +170,7 @@ class UnsteadyFlowFile:
                 "paired_values": [...],    # [stage, flow, stage, flow, ...] 用于 type 3/4
                 "slope": "0.1",            # Flow Hydrograph Slope / Friction Slope
                 "use_initial_stage": -1,   # Stage Hydrograph 专用
+                "initial_ws": 0.0,         # Flow Hydrograph Initial WS 专用
             }
         """
         result: dict = {
@@ -178,6 +180,7 @@ class UnsteadyFlowFile:
             "paired_values": [],
             "slope": None,
             "use_initial_stage": None,
+            "initial_ws": None,
         }
 
         # Flow Hydrograph
@@ -186,6 +189,7 @@ class UnsteadyFlowFile:
             if hasattr(hv, 'data') and hv.data:
                 result["values"] = [float(d.value) for d in hv.data]
             result["slope"] = bc["Flow Hydrograph Slope"].value if "Flow Hydrograph Slope" in bc else None
+            result["initial_ws"] = float(bc["Flow Hydrograph Inital WS"].value) if "Flow Hydrograph Inital WS" in bc else None
 
         # Stage Hydrograph
         elif "Stage Hydrograph" in bc:
