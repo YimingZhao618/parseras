@@ -88,6 +88,12 @@ class ProjectFile:
             self._key_order.append('Plan File')
         self._multi_keys['Plan File'].append(filename)
 
+    def add_unsteady_file(self, filename: str):
+        """添加非恒定流文件"""
+        if 'Unsteady File' not in self._key_order:
+            self._key_order.append('Unsteady File')
+        self._multi_keys['Unsteady File'].append(filename)
+
     def keys(self) -> List[str]:
         """获取所有 key（按原始顺序）"""
         return self._key_order.copy()
