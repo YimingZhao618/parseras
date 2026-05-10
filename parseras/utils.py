@@ -70,6 +70,8 @@ def get_point_at_distance(points: List[List[float]], distance: float) -> Tuple[f
     total_length = 0.0
     for i in range(1, len(points)):
         segment_length = calculate_distance(points[i - 1], points[i])
+        if segment_length == 0.0:
+            continue
         if total_length + segment_length >= distance:
             # 在当前线段上插值
             ratio = (distance - total_length) / segment_length

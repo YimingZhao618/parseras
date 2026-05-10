@@ -467,7 +467,8 @@ class LateralWeirModel:
             return json.dumps({"status": "success", "data": {}, "message": message}, indent=2)
 
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            import traceback
+            return json.dumps({"status": "error", "data": {}, "message": str(e), "trace": traceback.format_exc()}, indent=2)
 
     def delete_lateral_weir(self, node_name: str) -> str:
         """删除侧堰
