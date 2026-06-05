@@ -3,7 +3,7 @@ from .core.flow_file import FlowFile
 from .core.plan_file import PlanFile, PlanHead, PlanTimeInterval, PlanRunOptions, PlanBreach
 from .core.project_file import ProjectFile
 from .core.unsteady_flow_file import UnsteadyFlowFile, UnsteadyFlowHead, InitialStorageElev, BoundaryCondition
-from .core.structures import RASStructure, Head, River, SingleBreakLine, BreakLine, StorageArea, LateralWeir, CrossSection, BCLine, SingleBCLine, Connection
+from .core.structures import RASStructure, Head, River, SingleBreakLine, BreakLine, StorageArea, LateralWeir, CrossSection, BCLine, SingleBCLine, Connection, Junction
 from .core.flow_structures import FlowHead, FlowProfile, ObservedWS, DSSImport
 from .core.values import Value, StringValue, IntValue, FloatValue, CommaSeparatedValue, SpaceSeparatedValue, LinesValue, DataBlockValue
 from . import utils
@@ -46,6 +46,7 @@ __all__ = [
     'BCLine',
     'SingleBCLine',
     "Connection",
+    "Junction",
     # Flow structures
     'FlowHead',
     'FlowProfile',

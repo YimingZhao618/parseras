@@ -10,12 +10,14 @@ from parseras.core.structures import (
     CrossSection,
     BCLine,
     Connection,
+    Junction,
 )
 
 
 class GeometryFile:
     BLOCK_STARTS = [
         "Geom Title=",
+        "Junct Name=",
         "River Reach=",
         "BreakLine Name=",
         "BC Line Name=",
@@ -69,6 +71,7 @@ class GeometryFile:
 
         block_type_map = {
             "Geom Title": Head,
+            "Junct Name": Junction,
             "River Reach": River,
             "BreakLine Name": BreakLine,
             "BC Line Name": BCLine,

@@ -377,3 +377,128 @@ class Connection(RASStructure):
             "Conn Weir SE": (DataBlockValue, {"value_width": 8, "values_per_line": 10, "items_per_value": 2}),
         }
         super().__init__(lines)
+
+
+class Junction(RASStructure):
+    """HEC-RAS Stream Junction block.
+
+    Represents a confluence/diversion point connecting multiple upstream reaches
+    to a single downstream reach. Example 10 (JUNCTION.g01) is the reference.
+
+    Key structural differences from other RASStructure subclasses:
+    - "Up River,Reach" can appear multiple times (one per upstream reach)
+    - "Junc L&A" can appear multiple times (one per upstream reach)
+    - "Dn River,Reach" appears exactly once (single downstream reach)
+    """
+    order = 8.0  # Before River(10.0), after Head(0.0)
+
+    def __init__(self, lines: List[str]):
+        # Keys that can appear multiple times → accumulate into lists
+        self._multi_keys = {"Up River,Reach": [], "Junc L&A": []}
+
+        self._key_value_types = {
+            "Junct Name": StringValue,
+            "Junct Desc": StringValue,
+            "Junct X Y & Text X Y": (CommaSeparatedValue, {"element_type": StringValue}),
+            "Up River,Reach": (CommaSeparatedValue, {"element_type": StringValue}),
+            "Dn River,Reach": (CommaSeparatedValue, {"element_type": StringValue}),
+            "Junc L&A": (CommaSeparatedValue, {"element_type": StringValue}),
+        }
+        super().__init__(lines)
+
+    def _parse_lines(self, lines: List[str]):
+        """Override to handle multi-occurrence keys (Up River,Reach; Junc L&A)."""
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if not line.strip():
+                i += 1
+                continue
+
+            if "=" not in line:
+                i += 1
+                continue
+
+            key, value_str = self._parse_key_value_line(line)
+
+            # Fuzzy match
+            matched_key = None
+            for dict_key in self._key_value_types:
+                if dict_key.rstrip() == key.rstrip():
+                    matched_key = dict_key
+                    break
+
+            if matched_key is not None:
+                value_type_info = self._key_value_types[matched_key]
+
+                if isinstance(value_type_info, tuple) and len(value_type_info) == 2:
+                    value_type, kwargs = value_type_info
+                    value = value_type(value_str, **kwargs)
+                elif isinstance(value_type_info, type) and issubclass(value_type_info, Value):
+                    value = value_type_info(value_str)
+                else:
+                    value = value_str
+
+                # Accumulate multi-occurrence keys into lists
+                if matched_key in self._multi_keys:
+                    self._multi_keys[matched_key].append(value)
+                    self._key_value_pairs[matched_key] = value  # keep last one for generate()
+                else:
+                    self._key_value_pairs[matched_key] = value
+                i += 1
+            else:
+                i += 1
+
+        return self
+
+    @property
+    def up_reaches(self) -> List[Tuple[str, str]]:
+        """Return list of (river, reach) tuples for upstream reaches."""
+        result = []
+        for val in self._multi_keys.get("Up River,Reach", []):
+            parts = str(val).split(",")
+            if len(parts) >= 2:
+                result.append((parts[0].strip(), parts[1].strip()))
+        return result
+
+    @property
+    def dn_reach(self) -> Tuple[str, str]:
+        """Return (river, reach) tuple for the single downstream reach."""
+        val = self._key_value_pairs.get("Dn River,Reach")
+        if val is not None:
+            parts = str(val).split(",")
+            if len(parts) >= 2:
+                return (parts[0].strip(), parts[1].strip())
+        return ("", "")
+
+    @property
+    def junc_lengths_angles(self) -> List[Tuple[str, str]]:
+        """Return list of (length, angle) tuples, one per upstream reach."""
+        result = []
+        for val in self._multi_keys.get("Junc L&A", []):
+            parts = str(val).split(",")
+            length = parts[0].strip() if len(parts) > 0 else ""
+            angle = parts[1].strip() if len(parts) > 1 else ""
+            result.append((length, angle))
+        return result
+
+    def generate(self) -> List[str]:
+        result = []
+        # Single-value keys
+        for key in ["Junct Name", "Junct Desc", "Junct X Y & Text X Y"]:
+            if key in self._key_value_pairs:
+                result.append(self._format_key_value_line(key, self._key_value_pairs[key]))
+
+        # Multiple "Up River,Reach=" lines
+        for val in self._multi_keys.get("Up River,Reach", []):
+            result.append(f"Up River,Reach={val}\n")
+
+        # Single "Dn River,Reach=" line
+        if "Dn River,Reach" in self._key_value_pairs:
+            result.append(self._format_key_value_line("Dn River,Reach", self._key_value_pairs["Dn River,Reach"]))
+
+        # Multiple "Junc L&A=" lines
+        for val in self._multi_keys.get("Junc L&A", []):
+            result.append(f"Junc L&A={val}\n")
+
+        return result
