@@ -4,8 +4,9 @@ LateralWeirModel 类 - 提供侧堰的业务逻辑封装
 
 import json
 from typing import Optional
+from shapely.geometry import LineString, Point
 from parseras.core.file import GeometryFile
-from parseras.core.structures import LateralWeir
+from parseras.core.structures import LateralWeir, StorageArea
 from parseras.core.values import (
     CommaSeparatedValue,
     DataBlockValue,
@@ -13,7 +14,7 @@ from parseras.core.values import (
     FloatValue,
     StringValue,
 )
-from parseras.utils import generate_se_from_centerline
+from parseras.utils import generate_se_from_centerline, calculate_total_length
 
 
 class LateralWeirModel:
@@ -162,6 +163,137 @@ class LateralWeirModel:
         except Exception as e:
             return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
 
+    def _get_surface_line_coords(self, storage_area: StorageArea) -> Optional[list]:
+        """从StorageArea块提取Storage Area Surface Line坐标列表，并确保闭合"""
+        if "Storage Area Surface Line" not in storage_area:
+            return None
+        surface_line = storage_area["Storage Area Surface Line"].value
+        if not hasattr(surface_line, 'data') or not surface_line.data:
+            return None
+        coords = []
+        data = surface_line.data
+        for i in range(0, len(data), 2):
+            if i + 1 < len(data):
+                coords.append((float(data[i].value), float(data[i + 1].value)))
+        if len(coords) < 2:
+            return None
+        # 若首尾不相同，主动闭合（将首点追加到末尾）
+        if coords[0] != coords[-1]:
+            coords = coords + [coords[0]]
+        return coords
+
+    def _find_perimeter_intersection(self, endpoint: tuple, centerline_segment_start: tuple, centerline_segment_end: tuple, perimeter_coords: list) -> tuple:
+        """从centerline端点，向perimeter做最近点投影，返回投影点坐标
+
+        Args:
+            endpoint: 中心线端点 (x, y)
+            centerline_segment_start: 端点所在线段的起点 (x, y) — 仅用于兼容签名
+            centerline_segment_end: 端点所在线段的终点 (x, y) — 仅用于兼容签名
+            perimeter_coords: perimeter折线的坐标列表 [(x,y), ...]
+
+        Returns:
+            (x, y) 投影点坐标
+        """
+        from shapely.ops import nearest_points
+
+        perimeter_line = LineString(perimeter_coords)
+        np_pt = nearest_points(Point(endpoint), perimeter_line)[1]
+        return (np_pt.x, np_pt.y)
+
+    def _extract_polyline_xy(self, perimeter_coords: list, pt_x: tuple, pt_y: tuple, centerline: list) -> list:
+        """从闭合的 perimeter 折线中提取 X 到 Y 之间的部分
+
+        Perimeter 被 X、Y 切成两段，计算每段所有点到 centerline 的平均距离，
+        选平均距离较小的那一段作为结果。返回的折线以 X 为起点、Y 为终点。
+
+        Args:
+            perimeter_coords: perimeter 折线坐标（闭合，首==尾）[(x,y), ...]
+            pt_x: 点 X（centerline 端点 A 在 perimeter 上的最近投影）
+            pt_y: 点 Y（centerline 端点 B 在 perimeter 上的最近投影）
+            centerline: lateral weir centerline 坐标 [[x,y], ...]
+
+        Returns:
+            折线 XY 坐标列表（首=X，末=Y）
+
+        Raises:
+            ValueError: X、Y 落在同一边上无法区分
+        """
+        from shapely.geometry import Point, LineString
+        from shapely.ops import nearest_points
+
+        if len(perimeter_coords) < 2:
+            raise ValueError("Perimeter line has fewer than 2 points")
+
+        n = len(perimeter_coords)
+        closed = perimeter_coords[0] == perimeter_coords[-1]
+
+        def proj_t(pt, s, e):
+            """pt 到线段 s->e 的投影参数 t（0≤t≤1）"""
+            dx, dy = e[0] - s[0], e[1] - s[1]
+            l2 = dx * dx + dy * dy
+            if l2 < 1e-12:
+                return 0.0
+            return max(0.0, min(1.0, ((pt[0] - s[0]) * dx + (pt[1] - s[1]) * dy) / l2))
+
+        def is_on_edge(pt, s, e, tol=1e-6):
+            """判断 pt 是否在线段 s->e 上（含端点）"""
+            t = proj_t(pt, s, e)
+            proj = (s[0] + t * (e[0] - s[0]), s[1] + t * (e[1] - s[1]))
+            return (pt[0] - proj[0]) ** 2 + (pt[1] - proj[1]) ** 2 < tol
+
+        # 找 X、Y 所在的边索引
+        idx_x = None
+        for i in range(n - 1):
+            if is_on_edge(pt_x, perimeter_coords[i], perimeter_coords[i + 1]):
+                idx_x = i
+                break
+        idx_y = None
+        for i in range(n - 1):
+            if is_on_edge(pt_y, perimeter_coords[i], perimeter_coords[i + 1]):
+                idx_y = i
+                break
+
+        if idx_x is None or idx_y is None or idx_x == idx_y:
+            raise ValueError(f"X or Y not on perimeter edge, or same edge (idx_x={idx_x}, idx_y={idx_y})")
+
+        # 构建路径：将 X、Y 作为插值端点插入到顶点列表中
+        # 处理闭合折线的去重（末尾=首点）
+        unique_coords = perimeter_coords[:-1] if closed else perimeter_coords
+        n_u = len(unique_coords)
+
+        def build_path(i_x, i_y):
+            """从边 i_x 到边 i_y 的路径（含 X 和 Y）"""
+            seg_x_s, seg_x_e = unique_coords[i_x], unique_coords[(i_x + 1) % n_u]
+            seg_y_s, seg_y_e = unique_coords[i_y], unique_coords[(i_y + 1) % n_u]
+            t_x = proj_t(pt_x, seg_x_s, seg_x_e)
+            t_y = proj_t(pt_y, seg_y_s, seg_y_e)
+            x_interp = (seg_x_s[0] + t_x * (seg_x_e[0] - seg_x_s[0]),
+                         seg_x_s[1] + t_x * (seg_x_e[1] - seg_x_s[1]))
+            y_interp = (seg_y_s[0] + t_y * (seg_y_e[0] - seg_y_s[0]),
+                         seg_y_s[1] + t_y * (seg_y_e[1] - seg_y_s[1]))
+            path = [x_interp]
+            # 沿折线方向从 i_x 到 i_y
+            i = (i_x + 1) % n_u
+            while i != (i_y + 1) % n_u:
+                path.append(unique_coords[i])
+                i = (i + 1) % n_u
+            path.append(y_interp)
+            return path
+
+        path1 = build_path(idx_x, idx_y)
+        path2 = build_path(idx_y, idx_x)
+
+        # 用 centerline 计算平均距离选路径
+        cl_line = LineString(centerline)
+
+        def avg_dist(path):
+            if len(path) < 2:
+                return float("inf")
+            total = sum(Point(p).distance(cl_line) for p in path)
+            return total / len(path)
+
+        return path1 if avg_dist(path1) <= avg_dist(path2) else path2
+
     def update_or_create_lateral_weir(self, input_json: str, tif_path: Optional[str] = None) -> str:
         """更新或创建侧堰
 
@@ -263,7 +395,64 @@ class LateralWeirModel:
                 centerline_block.value = centerline_value
                 target_lw["Lateral Weir Centerline"] = centerline_block
 
-                se_table = generate_se_from_centerline(lw_centerline, tif_path)
+                # 确定传入generate_se_from_centerline的折线
+                se_input_coords = lw_centerline  # 默认使用lw_centerline
+
+                if lw_end_param:
+                    # 查找lw_end_param对应的StorageArea（2D Flow Area）
+                    target_sa = None
+                    for sa in self.geometry_file.get_blocks_by_type(StorageArea):
+                        if "Storage Area" in sa:
+                            sa_value = sa["Storage Area"].value
+                            if sa_value and len(sa_value) > 0 and sa_value[0].value == lw_end_param:
+                                target_sa = sa
+                                break
+
+                    if target_sa is None:
+                        return json.dumps(
+                            {"status": "error", "data": {}, "message": f"Storage area '{lw_end_param}' not found for Lateral Weir End Parameter"},
+                            indent=2,
+                        )
+
+                    perimeter_coords = self._get_surface_line_coords(target_sa)
+                    if not perimeter_coords:
+                        return json.dumps(
+                            {"status": "error", "data": {}, "message": f"Storage area '{lw_end_param}' has no valid Surface Line"},
+                            indent=2,
+                        )
+
+                    if len(lw_centerline) < 2:
+                        return json.dumps(
+                            {"status": "error", "data": {}, "message": "Lateral Weir Centerline must have at least 2 points"},
+                            indent=2,
+                        )
+
+                    # 点A：lw_centerline第一个端点
+                    pt_a = (float(lw_centerline[0][0]), float(lw_centerline[0][1]))
+                    # 点A所在的线段：第一个点与其下一个点
+                    seg_a_start = pt_a
+                    seg_a_end = (float(lw_centerline[1][0]), float(lw_centerline[1][1]))
+                    pt_x = self._find_perimeter_intersection(pt_a, seg_a_start, seg_a_end, perimeter_coords)
+
+                    # 点B：lw_centerline另一个端点
+                    pt_b = (float(lw_centerline[-1][0]), float(lw_centerline[-1][1]))
+                    seg_b_start = (float(lw_centerline[-2][0]), float(lw_centerline[-2][1]))
+                    seg_b_end = pt_b
+                    pt_y = self._find_perimeter_intersection(pt_b, seg_b_start, seg_b_end, perimeter_coords)
+
+                    # 从perimeter折线提取点X、Y之间的部分
+                    se_input_coords = self._extract_polyline_xy(perimeter_coords, pt_x, pt_y, lw_centerline)
+
+                se_table = generate_se_from_centerline(se_input_coords, tif_path)
+
+                # 当用了 perimeter 折线时，按 centerline 长度比例缩放距离，使 ratio = 100%
+                if lw_end_param:
+                    xy_len = calculate_total_length(se_input_coords)
+                    cl_len = calculate_total_length(lw_centerline)
+                    if xy_len > 0:
+                        scale = cl_len / xy_len
+                        se_table = [[d * scale, e] for d, e in se_table]
+
                 se_data = []
                 for dist, elev in se_table:
                     se_data.extend([FloatValue(str(dist)), FloatValue(str(elev))])
@@ -278,7 +467,8 @@ class LateralWeirModel:
             return json.dumps({"status": "success", "data": {}, "message": message}, indent=2)
 
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            import traceback
+            return json.dumps({"status": "error", "data": {}, "message": str(e), "trace": traceback.format_exc()}, indent=2)
 
     def delete_lateral_weir(self, node_name: str) -> str:
         """删除侧堰
