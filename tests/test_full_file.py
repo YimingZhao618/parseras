@@ -7,12 +7,20 @@ FULL_FILE_TESTS = [
         "file_path": "tests/data/all.g01",
     },
     {
+        "test_name": "dam.g01",
+        "file_path": "tests/data/dam.g01",
+    },
+    {
         "test_name": "leak.g01",
         "file_path": "tests/data/leak.g01",
     },
     {
         "test_name": "thin.g01",
         "file_path": "tests/data/thin.g01",
+    },
+    {
+        "test_name": "dam-thin.g01",
+        "file_path": "tests/data/dam-thin.g01",
     },
     {
         "test_name": "Muncie.g01",

@@ -2,6 +2,12 @@ import json
 from parseras.core.file import GeometryFile
 from parseras.core.structures import CrossSection
 from typing import Optional
+from parseras.utils import (
+    calculate_centroid,
+    calculate_total_length,
+    get_point_at_distance,
+    get_elevation_from_tif,
+)
 
 
 class CrossSectionModel:
@@ -9,43 +15,7 @@ class CrossSectionModel:
         self.geometry_file = geometry_file
         self.cross_sections = geometry_file.get_blocks_by_type(CrossSection)
 
-    def get_all_cross_section_lines(self) -> str:
-        """返回所有断面的折线点数值，也就是XS GIS Cut Line对应的点
-
-        返回格式：
-        {
-            "status": "success",
-            "data": {
-                "station1": [[x1, y1], [x2, y2], ...],
-                "station2": [[x1, y1], [x2, y2], ...],
-                ...
-            },
-            "message": ""
-        }
-        """
-        try:
-            result = {}
-            for xs in self.cross_sections:
-                if "Type RM Length L Ch R " in xs and "XS GIS Cut Line" in xs:
-                    # 提取断面在河流上的Station
-                    type_rm = xs["Type RM Length L Ch R "].value
-                    if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取折线点
-                        cut_line = xs["XS GIS Cut Line"].value
-                        points = []
-                        data = cut_line.data
-                        for i in range(0, len(data), 2):
-                            if i + 1 < len(data):
-                                x = data[i].value
-                                y = data[i + 1].value
-                                points.append([x, y])
-                        result[station] = points
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
-        except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
-
-    def get_station_elev_table(self, station: float) -> str:
+    def get_station_elev_table(self, station) -> str:
         """返回特定断面的Station/Elev表
 
         返回格式：
@@ -64,8 +34,8 @@ class CrossSectionModel:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        xs_station = float(type_rm[1].value)
-                        if xs_station == station:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
                             # 提取Sta/Elev表
                             sta_elev = xs["#Sta/Elev"].value
                             stations = []
@@ -88,85 +58,143 @@ class CrossSectionModel:
                 {"status": "error", "data": {"stations": [], "elevations": []}, "message": str(e)}, indent=2
             )
 
-    def get_all_mann_values(self) -> str:
-        """返回所有断面的曼宁值，也就是Mann
+    def get_mann_values(self, station) -> str:
+        """返回特定断面的曼宁值
+
+        Args:
+            station: 断面在河流上的Station值
 
         返回格式：
         {
             "status": "success",
             "data": {
-                "station1": {
-                    "Station": [sta1, sta2, ...],
-                    "Manning": [mann1, mann2, ...]
-                },
-                "station2": {
-                    "Station": [sta1, sta2, ...],
-                    "Manning": [mann1, mann2, ...]
-                },
-                ...
+                "Station": [sta1, sta2, ...],
+                "Manning": [mann1, mann2, ...]
             },
             "message": ""
         }
         """
         try:
-            result = {}
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R " in xs and "#Mann" in xs:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取曼宁值
-                        data = xs["#Mann"].value.data
-                        stations = []
-                        mannings = []
-                        for i in range(0, len(data), 3):
-                            if i + 2 < len(data):
-                                sta = data[i].value
-                                mann = data[i + 1].value
-                                stations.append(sta)
-                                mannings.append(mann)
-                        # 构建转置后的格式
-                        result[station] = {"Station": stations, "Manning": mannings}
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
+                            # 提取曼宁值
+                            data = xs["#Mann"].value.data
+                            stations = []
+                            mannings = []
+                            for i in range(0, len(data), 3):
+                                if i + 2 < len(data):
+                                    sta = data[i].value
+                                    mann = data[i + 1].value
+                                    stations.append(sta)
+                                    mannings.append(mann)
+                            result = {"Station": stations, "Manning": mannings}
+                            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": {"Station": [], "Manning": []}, "message": ""}, indent=2)
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            return json.dumps({"status": "error", "data": {"Station": [], "Manning": []}, "message": str(e)}, indent=2)
 
-    def get_all_bank_stations(self) -> str:
-        """返回所有断面的Bank Sta值
+    def get_bank_stations(self, station) -> str:
+        """返回特定断面的Bank Sta值
+
+        Args:
+            station: 断面在河流上的Station值
 
         返回格式：
         {
             "status": "success",
-            "data": {
-                "station1": [bank_sta1, bank_sta2],
-                "station2": [bank_sta1, bank_sta2],
-                ...
-            },
+            "data": [bank_sta_left, bank_sta_right],
             "message": ""
         }
         """
         try:
-            result = {}
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R " in xs and "Bank Sta" in xs:
                     # 提取断面在河流上的Station
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        station = float(type_rm[1].value)
-                        # 提取Bank Sta值
-                        bank_sta = xs["Bank Sta"].value
-                        values: list[Optional[float]] = [float(item.value) for item in bank_sta if item.value]
-                        # 确保只返回前两个值，分别对应左岸和右岸
-                        if len(values) > 2:
-                            values = values[:2]
-                        # 如果不足两个值，用None填充
-                        elif len(values) < 2:
-                            values.extend([None] * (2 - len(values)))
-                        result[station] = values
-            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
+                            # 提取Bank Sta值
+                            bank_sta = xs["Bank Sta"].value
+                            values: list[Optional[float]] = [float(item.value) for item in bank_sta if item.value]
+                            # 确保只返回前两个值，分别对应左岸和右岸
+                            if len(values) > 2:
+                                values = values[:2]
+                            # 如果不足两个值，用None填充
+                            elif len(values) < 2:
+                                values.extend([None] * (2 - len(values)))
+                            return json.dumps({"status": "success", "data": values, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
         except Exception as e:
-            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+            return json.dumps({"status": "error", "data": [None, None], "message": str(e)}, indent=2)
+
+    def get_bank_station_coordinates(self, station) -> str:
+        """返回特定断面河岸的x,y坐标
+
+        Args:
+            station: 断面在河流上的Station值
+
+        返回格式：
+        {
+            "status": "success",
+            "data": [[x1, y1], [x2, y2]],  # 左岸坐标, 右岸坐标
+            "message": ""
+        }
+        """
+        try:
+            for xs in self.cross_sections:
+                if "Type RM Length L Ch R " in xs and "Bank Sta" in xs and "XS GIS Cut Line" in xs:
+                    # 提取断面在河流上的Station
+                    type_rm = xs["Type RM Length L Ch R "].value
+                    if len(type_rm) >= 2:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
+                            # 提取Bank Sta值
+                            bank_sta = xs["Bank Sta"].value
+                            values = [float(item.value) for item in bank_sta if item.value]
+                            if len(values) < 2:
+                                return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
+
+                            left_bank_sta = values[0]
+                            right_bank_sta = values[1]
+
+                            # 提取折线点
+                            cut_line = xs["XS GIS Cut Line"].value
+                            points = []
+                            data = cut_line.data
+                            for i in range(0, len(data), 2):
+                                if i + 1 < len(data):
+                                    x = data[i].value
+                                    y = data[i + 1].value
+                                    points.append([x, y])
+
+                            if not points:
+                                return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
+
+                            # 计算折线总长度
+                            total_length = calculate_total_length(points)
+
+                            left_point = None
+                            right_point = None
+
+                            # 获取左岸坐标
+                            if left_bank_sta is not None and 0 <= left_bank_sta <= total_length:
+                                left_point = get_point_at_distance(points, left_bank_sta)
+
+                            # 获取右岸坐标
+                            if right_bank_sta is not None and 0 <= right_bank_sta <= total_length:
+                                right_point = get_point_at_distance(points, right_bank_sta)
+
+                            result = [left_point, right_point]
+                            return json.dumps({"status": "success", "data": result, "message": ""}, indent=2)
+            return json.dumps({"status": "success", "data": [None, None], "message": ""}, indent=2)
+        except Exception as e:
+            return json.dumps({"status": "error", "data": [None, None], "message": str(e)}, indent=2)
 
     def update_mann_values(self, input_json: str) -> str:
         """更新特定断面的曼宁值
@@ -207,8 +235,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == xs_station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(xs_station).strip():
                             target_xs = xs
                             break
 
@@ -278,8 +306,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == xs_station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(xs_station).strip():
                             target_xs = xs
                             break
 
@@ -337,8 +365,8 @@ class CrossSectionModel:
                 if "Type RM Length L Ch R " in xs:
                     type_rm = xs["Type RM Length L Ch R "].value
                     if len(type_rm) >= 2:
-                        current_station = float(type_rm[1].value)
-                        if current_station == station:
+                        current_station = str(type_rm[1].value).strip()
+                        if current_station == str(station).strip():
                             target_xs = xs
                             break
 
@@ -353,102 +381,19 @@ class CrossSectionModel:
             else:
                 message = "Cross section updated successfully"
 
-            # 计算几何中心的函数
-            def calculate_centroid(points):
-                if not points:
-                    return (0, 0)
-                x_coords = [p[0] for p in points]
-                y_coords = [p[1] for p in points]
-                centroid_x = sum(x_coords) / len(x_coords)
-                centroid_y = sum(y_coords) / len(y_coords)
-                return (centroid_x, centroid_y)
-
-            # 计算两点之间的距离
-            def calculate_distance(p1, p2):
-                import math
-
-                return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
-
-            # 计算折线的总长度
-            def calculate_total_length(points):
-                total_length = 0
-                for i in range(1, len(points)):
-                    total_length += calculate_distance(points[i - 1], points[i])
-                return total_length
-
-            # 在折线上根据距离获取点
-            def get_point_at_distance(points, distance):
-                if not points:
-                    return (0, 0)
-                if len(points) == 1:
-                    return points[0]
-
-                total_length = 0
-                for i in range(1, len(points)):
-                    segment_length = calculate_distance(points[i - 1], points[i])
-                    if total_length + segment_length >= distance:
-                        # 在当前线段上插值
-                        ratio = (distance - total_length) / segment_length
-                        x = points[i - 1][0] + ratio * (points[i][0] - points[i - 1][0])
-                        y = points[i - 1][1] + ratio * (points[i][1] - points[i - 1][1])
-                        return (x, y)
-                    total_length += segment_length
-                # 如果距离超过总长度，返回最后一个点
-                return points[-1]
-
-            # 从tif获取高程（支持批量处理）
-            def get_elevation_from_tif(xs, ys, tif_path):
-                try:
-                    import rasterio
-                    import numpy as np
-                    from rasterio.transform import rowcol
-
-                    with rasterio.open(tif_path) as src:
-                        # 计算像素坐标
-                        rows, cols = rowcol(src.transform, xs, ys)
-                        rows = np.array(rows)
-                        cols = np.array(cols)
-
-                        # 过滤有效像素
-                        valid = (rows >= 0) & (rows < src.height) & (cols >= 0) & (cols < src.width)
-
-                        elevations = np.full_like(xs, 0.0, dtype=np.float32)
-
-                        if not np.any(valid):
-                            return elevations.tolist()
-
-                        # 计算包围窗口
-                        row_min, row_max = rows[valid].min(), rows[valid].max()
-                        col_min, col_max = cols[valid].min(), cols[valid].max()
-
-                        # 读取窗口
-                        window = ((row_min, row_max + 1), (col_min, col_max + 1))
-                        data = src.read(1, window=window)
-
-                        # 提取值
-                        local_rows = rows[valid] - row_min
-                        local_cols = cols[valid] - col_min
-                        elevations[valid] = data[local_rows, local_cols]
-
-                        # 处理可能的空值
-                        elevations = np.nan_to_num(elevations, nan=0.0)
-
-                        return elevations.tolist()
-                except Exception:
-                    return [0.0] * len(xs)
-
             # 计算当前断面的几何中心
             current_centroid = calculate_centroid(xs_gis_cut_line)
 
-            # 找到比当前Station大的最小断面
+            # 找到比当前Station大的最小断面（station 转数值用于排序比较）
             next_xs = None
             next_station = float("inf")
+            station_float = float(station)
             for xs in self.cross_sections:
                 if "Type RM Length L Ch R" in xs and "XS GIS Cut Line" in xs:
                     type_rm = xs["Type RM Length L Ch R"].value
                     if len(type_rm) >= 2:
                         current_station = float(type_rm[1].value)
-                        if current_station > station and current_station < next_station:
+                        if current_station > station_float and current_station < next_station:
                             next_station = current_station
                             next_xs = xs
 
@@ -480,12 +425,9 @@ class CrossSectionModel:
             type_rm_value = CommaSeparatedValue(type_rm_str, element_type=StringValue)
             target_xs["Type RM Length L Ch R "] = type_rm_value
 
-            # 手动更新order属性
-            try:
-                if station > 0:
-                    target_xs.order = 30 + 1 / station
-            except (ValueError, AttributeError):
-                pass
+            # 手动更新order属性（station_float 用于数值计算）
+            if station_float > 0:
+                target_xs.order = 30 + 1 / station_float
 
             # 更新XS GIS Cut Line
             from parseras.core.values import DataBlockValue, DataValue, FloatValue
@@ -540,5 +482,52 @@ class CrossSectionModel:
                     del target_xs["#Sta/Elev"]
 
             return json.dumps({"status": "success", "data": {}, "message": message}, indent=2)
+        except Exception as e:
+            return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)
+
+    def delete_cross_section(self, input_json: str) -> str:
+        """删除指定断面的Station
+
+        输入格式：
+        {
+            "Station": 1.0
+        }
+
+        返回格式：
+        {
+            "status": "success",
+            "data": {},
+            "message": "Cross section deleted successfully"
+        }
+        """
+        try:
+            input_data = json.loads(input_json)
+            station = input_data.get("Station")
+
+            if station is None:
+                return json.dumps({"status": "error", "data": {}, "message": "Missing required field 'Station'"}, indent=2)
+
+            xs_index = None
+            for i, xs in enumerate(self.geometry_file._blocks):
+                if isinstance(xs, CrossSection) and "Type RM Length L Ch R " in xs:
+                    type_rm = xs["Type RM Length L Ch R "].value
+                    if len(type_rm) >= 2:
+                        xs_station = str(type_rm[1].value).strip()
+                        if xs_station == str(station).strip():
+                            xs_index = i
+                            break
+
+            if xs_index is None:
+                return json.dumps(
+                    {"status": "error", "data": {}, "message": f"Cross section at station {station} not found"},
+                    indent=2,
+                )
+
+            del self.geometry_file._blocks[xs_index]
+            self.cross_sections = self.geometry_file.get_blocks_by_type(CrossSection)
+
+            return json.dumps(
+                {"status": "success", "data": {}, "message": "Cross section deleted successfully"}, indent=2
+            )
         except Exception as e:
             return json.dumps({"status": "error", "data": {}, "message": str(e)}, indent=2)

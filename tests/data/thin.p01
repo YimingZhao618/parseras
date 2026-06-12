@@ -1,0 +1,16 @@
+Plan Title=plan
+Short Identifier=1
+Simulation Date=01SEP2008,0000,02SEP2008,0000
+Geom File=g01
+Flow File=u01
+Computation Interval=1MIN
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Run HTab=-1
+Run UNet=-1
+Run PostProcess=-1
+DSS File=dss
+Breach Loc=,,,True,Storage Area 1 T
+Breach Geom=700,50,945,10,5,False,0.5,,1,1.44
+Breach Start=True,951.5,,,False,,,0

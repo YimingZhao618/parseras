@@ -18,6 +18,7 @@ class ProjectFile:
         self._multi_keys: Dict[str, List[str]] = {
             'Geom File': [],
             'Flow File': [],
+            'Unsteady File': [],
             'Plan File': [],
         }  # 支持多个值的 key
 
@@ -87,6 +88,12 @@ class ProjectFile:
             self._key_order.append('Plan File')
         self._multi_keys['Plan File'].append(filename)
 
+    def add_unsteady_file(self, filename: str):
+        """添加非恒定流文件"""
+        if 'Unsteady File' not in self._key_order:
+            self._key_order.append('Unsteady File')
+        self._multi_keys['Unsteady File'].append(filename)
+
     def keys(self) -> List[str]:
         """获取所有 key（按原始顺序）"""
         return self._key_order.copy()
@@ -112,8 +119,8 @@ class ProjectFile:
 
     @property
     def flow_files(self) -> List[str]:
-        """获取所有流量文件"""
-        return self.get_multi('Flow File')
+        """获取所有流量文件（Flow File 和 Unsteady File）"""
+        return self.get_multi('Flow File') + self.get_multi('Unsteady File')
 
     @property
     def plan_files(self) -> List[str]:

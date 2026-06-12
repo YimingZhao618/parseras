@@ -17,13 +17,19 @@ from .structures import (
     BreakLineMeta,
     BreakLine,
     CrossSection,
-    Foot,
     Head,
     LateralWeir,
-    StorageArea
+    StorageArea,
+    Connection,
 )
 
 from .file import GeometryFile
+from .unsteady_flow_file import (
+    UnsteadyFlowFile,
+    UnsteadyFlowHead,
+    InitialStorageElev,
+    BoundaryCondition,
+)
 
 __all__ = [
     # Values
@@ -43,10 +49,14 @@ __all__ = [
     "BreakLineMeta",
     "BreakLine",
     "CrossSection",
-    "Foot",
     "Head",
     "LateralWeir",
     "StorageArea",
+    "Connection",
+    "UnsteadyFlowHead",
+    "InitialStorageElev",
+    "BoundaryCondition",
     # File
-    "GeometryFile"
+    "GeometryFile",
+    "UnsteadyFlowFile",
 ]

@@ -1,12 +1,19 @@
 from .core.file import GeometryFile
 from .core.flow_file import FlowFile
-from .core.plan_file import PlanFile
+from .core.plan_file import PlanFile, PlanHead, PlanTimeInterval, PlanRunOptions, PlanBreach
 from .core.project_file import ProjectFile
-from .core.structures import RASStructure, Head, River, BreakLine, StorageArea, Foot, LateralWeir, CrossSection
+from .core.unsteady_flow_file import UnsteadyFlowFile, UnsteadyFlowHead, InitialStorageElev, BoundaryCondition
+from .core.structures import RASStructure, Head, River, SingleBreakLine, BreakLine, StorageArea, LateralWeir, CrossSection, BCLine, SingleBCLine, Connection, Junction
 from .core.flow_structures import FlowHead, FlowProfile, ObservedWS, DSSImport
 from .core.values import Value, StringValue, IntValue, FloatValue, CommaSeparatedValue, SpaceSeparatedValue, LinesValue, DataBlockValue
+from . import utils
 from .models.cross_section import CrossSectionModel
 from .models.river import RiverModel
+from .models.lateral_weir import LateralWeirModel
+from .models.breakline import BreakLineModel
+from .models.bcline import BCLineModel
+from .models.storage_area import StorageAreaModel
+from .models.connection import ConnectionModel
 
 __all__ = [
     # Geometry files
@@ -15,17 +22,31 @@ __all__ = [
     'FlowFile',
     # Plan files
     'PlanFile',
+    'PlanHead',
+    'PlanTimeInterval',
+    'PlanRunOptions',
+    'PlanBreach',
     # Project files
     'ProjectFile',
+    # Unsteady flow files
+    'UnsteadyFlowFile',
+    'UnsteadyFlowHead',
+    'InitialStorageElev',
+    'BoundaryCondition',
     # Geometry structures
     'RASStructure',
     'Head',
     'River',
+    "SingleBreakLine",
     'BreakLine',
     'StorageArea',
     'Foot',
     'LateralWeir',
     'CrossSection',
+    'BCLine',
+    'SingleBCLine',
+    "Connection",
+    "Junction",
     # Flow structures
     'FlowHead',
     'FlowProfile',
@@ -42,5 +63,12 @@ __all__ = [
     'DataBlockValue',
     # Models
     'CrossSectionModel',
-    'RiverModel'
+    'RiverModel',
+    'LateralWeirModel',
+    'BreakLineModel',
+    'BCLineModel',
+    'StorageAreaModel',
+    'ConnectionModel',
+    # Utils
+    'utils'
 ]
